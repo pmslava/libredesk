@@ -4,6 +4,8 @@ export function createSuggestionRenderer(ListComponent) {
   let component
   let popup
   let dismissed = false
+  let lastClientRect = null
+  let resizeObserver = null
 
   return {
     onStart: (props) => {
@@ -19,13 +21,24 @@ export function createSuggestionRenderer(ListComponent) {
       popup.style.zIndex = '9999'
       if (component.element) popup.appendChild(component.element)
       document.body.appendChild(popup)
-      updatePosition(popup, props.clientRect)
+      lastClientRect = props.clientRect
+      updatePosition(popup, lastClientRect)
+      // The list renders (and, for multi-level menus, grows or shrinks) after the first positioning pass, so
+      // a single measurement can miss the real height and leave the popup clipped below the viewport.
+      // Re-run the placement whenever the popup's size changes; the anchor rect stays the caret's.
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          if (popup && lastClientRect) updatePosition(popup, lastClientRect)
+        })
+        resizeObserver.observe(popup)
+      }
     },
 
     onUpdate: (props) => {
       component.updateProps({ ...props, query: props.query })
       if (!props.clientRect || !popup) return
-      updatePosition(popup, props.clientRect)
+      lastClientRect = props.clientRect
+      updatePosition(popup, lastClientRect)
     },
 
     onKeyDown: (props) => {
@@ -39,6 +52,8 @@ export function createSuggestionRenderer(ListComponent) {
     },
 
     onExit: () => {
+      resizeObserver?.disconnect()
+      resizeObserver = null
       popup?.remove()
       component.destroy()
     }
