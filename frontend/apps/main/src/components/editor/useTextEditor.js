@@ -15,6 +15,7 @@ export function useTextEditor({
   enableMentions = () => false,
   getConversationSuggestions = null,
   conversationReferencesEnabled = () => false,
+  noteCommandsEnabled = () => false,
   onSend = () => {},
   onToggleMessageType = null,
   onUpdate = () => {},
@@ -57,6 +58,7 @@ export function useTextEditor({
       enableMentions,
       getConversationSuggestions,
       conversationReferencesEnabled,
+      noteCommandsEnabled,
       handlePaste,
       handleDrop,
       handleKeyDown: (view, event) => {

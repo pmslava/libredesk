@@ -19,6 +19,8 @@ import { TrailingNode } from './extensions/TrailingNode'
 import mentionSuggestion from './mentionSuggestion'
 import conversationReferenceSuggestion from './conversationReferenceSuggestion'
 import { ConversationReference } from './conversationReferenceExtension'
+import noteCommandSuggestion from './noteCommandSuggestion'
+import { NoteCommand } from './noteCommandExtension'
 
 const lowlight = createLowlight(codeGrammars)
 
@@ -145,6 +147,7 @@ export function buildConversationExtensions({ getPlaceholder }) {
       suggestion: mentionSuggestion
     }),
     ConversationReference.configure({ suggestion: conversationReferenceSuggestion }),
+    NoteCommand.configure({ suggestion: noteCommandSuggestion }),
     CustomTable.configure({ resizable: false }),
     TableRow,
     CustomTableCell,

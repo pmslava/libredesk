@@ -97,6 +97,7 @@
         :disabled="isDraftLoading"
         :enableMentions="messageType === 'private_note'"
         :enableConversationReferences="messageType === 'private_note'"
+        :enableNoteCommands="messageType === 'private_note'"
         :enableInlineImages="conversationStore.current.inbox_channel === 'email'"
         :getSuggestions="getSuggestions"
         :getConversationSuggestions="getConversationSuggestions"
