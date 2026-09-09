@@ -88,33 +88,33 @@
       </span>
     </div>
 
-    <!-- Livechat visitor info -->
-    <template v-if="isLivechat">
-      <div v-if="countryAndLanguages" class="flex gap-2 items-center">
-        <Globe size="16" class="text-muted-foreground flex-shrink-0" />
-        <span class="sidebar-value">{{ countryAndLanguages }}</span>
-      </div>
-      <div v-if="conversation?.meta?.ip" class="flex gap-2 items-center">
-        <Monitor size="16" class="text-muted-foreground flex-shrink-0" />
-        <span class="sidebar-value break-all">{{ conversation.meta.ip }}</span>
-      </div>
-      <div v-if="userAgent" class="flex gap-2 items-center min-w-0">
-        <component
-          :is="userAgent.isMobile ? Smartphone : Laptop"
-          size="16"
-          class="text-muted-foreground flex-shrink-0"
-        />
-        <span v-if="userAgent.kind === 'product'" class="sidebar-value break-all">
-          {{ userAgent.label }}
-        </span>
-        <Tooltip v-else>
-          <TooltipTrigger as-child>
-            <span class="sidebar-value truncate min-w-0">{{ userAgent.label }}</span>
-          </TooltipTrigger>
-          <TooltipContent class="max-w-xs break-all">{{ userAgent.label }}</TooltipContent>
-        </Tooltip>
-      </div>
-    </template>
+    <!-- Where the contact is, on every channel: the country row also carries their languages. -->
+    <div v-if="countryAndLanguages" class="flex gap-2 items-center">
+      <Globe size="16" class="text-muted-foreground flex-shrink-0" />
+      <span class="sidebar-value">{{ countryAndLanguages }}</span>
+    </div>
+
+    <!-- Conversation-level, recorded by the livechat widget: an email conversation carries none. -->
+    <div v-if="conversation?.meta?.ip" class="flex gap-2 items-center">
+      <Monitor size="16" class="text-muted-foreground flex-shrink-0" />
+      <span class="sidebar-value break-all">{{ conversation.meta.ip }}</span>
+    </div>
+    <div v-if="userAgent" class="flex gap-2 items-center min-w-0">
+      <component
+        :is="userAgent.isMobile ? Smartphone : Laptop"
+        size="16"
+        class="text-muted-foreground flex-shrink-0"
+      />
+      <span v-if="userAgent.kind === 'product'" class="sidebar-value break-all">
+        {{ userAgent.label }}
+      </span>
+      <Tooltip v-else>
+        <TooltipTrigger as-child>
+          <span class="sidebar-value truncate min-w-0">{{ userAgent.label }}</span>
+        </TooltipTrigger>
+        <TooltipContent class="max-w-xs break-all">{{ userAgent.label }}</TooltipContent>
+      </Tooltip>
+    </div>
 
     <!-- Context Links -->
     <template v-if="contextLinks.length > 0">
