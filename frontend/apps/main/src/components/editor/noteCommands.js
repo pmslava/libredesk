@@ -20,7 +20,7 @@ export const NOTE_RUNNERS = [
     id: 'claude',
     label: 'Claude',
     mention: '@claude',
-    models: ['opus', 'sonnet', 'haiku'],
+    models: ['fable', 'opus', 'sonnet', 'haiku'],
     efforts: ['low', 'medium', 'high', 'xhigh', 'max']
   },
   {
