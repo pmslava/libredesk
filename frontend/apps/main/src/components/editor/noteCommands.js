@@ -77,11 +77,16 @@ export function textBeforeCommandChar(lineBeforeCaret = '', query = '') {
 }
 
 /** The text a finished runner + model + effort choice writes into the note. */
-export const runnerPrefix = (runner, model, effort) => `${runner.mention} ${model} ${effort}: `
+/** An empty model means "the runner's current default", so the prefix names no model at all. */
+export const runnerPrefix = (runner, model, effort) =>
+  model ? `${runner.mention} ${model} ${effort}: ` : `${runner.mention} ${effort}: `
+
+/** The model-level entry that leaves the model to the runner's current default. */
+export const DEFAULT_MODEL_LABEL = 'Default (current)'
 
 const effortLeaves = (runner, model) =>
   runner.efforts.map((effort) => ({
-    id: `${runner.id}:${model}:${effort}`,
+    id: `${runner.id}:${model || 'default'}:${effort}`,
     label: effort,
     hint: runnerPrefix(runner, model, effort).trim(),
     text: runnerPrefix(runner, model, effort)
@@ -91,11 +96,14 @@ const runnerEntry = (runner) => ({
   id: runner.id,
   label: runner.label,
   hint: runner.mention,
-  children: runner.models.map((model) => ({
-    id: `${runner.id}:${model}`,
-    label: model,
-    children: effortLeaves(runner, model)
-  }))
+  children: [
+    { id: `${runner.id}:default`, label: DEFAULT_MODEL_LABEL, children: effortLeaves(runner, '') },
+    ...runner.models.map((model) => ({
+      id: `${runner.id}:${model}`,
+      label: model,
+      children: effortLeaves(runner, model)
+    }))
+  ]
 })
 
 // "/model" and "/effort" complete a note that already names its runner, so they

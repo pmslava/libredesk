@@ -62,7 +62,11 @@ describe('note slash commands', () => {
 
     it('walks runner, model and effort down to the inserted prefix', () => {
       const claude = child(buildNoteCommandMenu(null), 'Claude')
-      expect(labels(claude.children)).toEqual(['opus', 'sonnet', 'haiku'])
+      expect(labels(claude.children)).toEqual(['Default (current)', 'fable', 'opus', 'sonnet', 'haiku'])
+
+      const current = child(claude.children, 'Default (current)')
+      expect(labels(current.children)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+      expect(child(current.children, 'xhigh').text).toBe('@claude xhigh: ')
 
       const opus = child(claude.children, 'opus')
       expect(labels(opus.children)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
@@ -73,6 +77,7 @@ describe('note slash commands', () => {
     it('carries the codex model catalogue', () => {
       const codex = child(buildNoteCommandMenu(null), 'Codex')
       expect(labels(codex.children)).toEqual([
+        'Default (current)',
         'gpt-5.6-terra',
         'gpt-5.6-sol',
         'gpt-5.6-luna',
