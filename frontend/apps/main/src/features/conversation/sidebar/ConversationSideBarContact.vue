@@ -40,7 +40,7 @@
         {{ conversation?.contact?.first_name + ' ' + conversation?.contact?.last_name }}
       </span>
     </div>
-    <div class="flex gap-2 items-center">
+    <div v-if="conversation?.contact?.email" class="flex gap-2 items-center">
       <Mail size="16" class="text-muted-foreground flex-shrink-0" />
       <Tooltip v-if="isLivechat">
         <TooltipTrigger as-child>
@@ -51,14 +51,31 @@
           isVerified ? t('contact.identityVerified') : t('contact.identityNotVerified')
         }}</TooltipContent>
       </Tooltip>
-      <span v-if="conversation?.contact?.email" class="sidebar-value break-all">
-        {{ conversation?.contact?.email }}
-      </span>
-      <span v-else class="sidebar-label">
-        {{ t('conversation.sidebar.notAvailable') }}
+      <span class="sidebar-value break-all">
+        {{ conversation.contact.email }}
       </span>
     </div>
-    <div class="flex gap-2 items-center">
+
+    <!-- Products this contact has written to, from the inboxes of their conversations. -->
+    <div v-if="products.length" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div v-for="product in products" :key="product.name" class="flex gap-1.5 items-center">
+        <img
+          v-if="product.icon"
+          :src="product.icon"
+          alt=""
+          class="size-4 rounded-sm flex-shrink-0"
+        />
+        <span
+          v-else
+          class="size-4 rounded-full bg-muted text-[8px] font-medium text-muted-foreground flex items-center justify-center flex-shrink-0"
+        >
+          {{ product.initials }}
+        </span>
+        <span class="sidebar-value">{{ product.name }}</span>
+      </div>
+    </div>
+
+    <div v-if="conversation?.contact?.phone_number" class="flex gap-2 items-center">
       <Phone size="16" class="text-muted-foreground flex-shrink-0" />
       <span class="sidebar-value">
         {{ phoneNumber }}
@@ -81,9 +98,21 @@
         <Monitor size="16" class="text-muted-foreground flex-shrink-0" />
         <span class="sidebar-value break-all">{{ conversation.meta.ip }}</span>
       </div>
-      <div v-if="conversation?.meta?.user_agent" class="flex gap-2 items-center">
-        <Smartphone size="16" class="text-muted-foreground flex-shrink-0" />
-        <span class="sidebar-value break-all">{{ parsedUA }}</span>
+      <div v-if="userAgent" class="flex gap-2 items-center min-w-0">
+        <component
+          :is="userAgent.isMobile ? Smartphone : Laptop"
+          size="16"
+          class="text-muted-foreground flex-shrink-0"
+        />
+        <span v-if="userAgent.kind === 'product'" class="sidebar-value break-all">
+          {{ userAgent.label }}
+        </span>
+        <Tooltip v-else>
+          <TooltipTrigger as-child>
+            <span class="sidebar-value truncate min-w-0">{{ userAgent.label }}</span>
+          </TooltipTrigger>
+          <TooltipContent class="max-w-xs break-all">{{ userAgent.label }}</TooltipContent>
+        </Tooltip>
       </div>
     </template>
 
@@ -119,6 +148,7 @@ import {
   ExternalLink,
   IdCard,
   Globe,
+  Laptop,
   Monitor,
   Smartphone,
   ShieldCheck,
@@ -126,6 +156,8 @@ import {
 } from 'lucide-vue-next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@shared-ui/components/ui/tooltip'
 import countries from '@shared-ui/constants/countries.js'
+import { productsFromInboxNames } from '@/features/conversation/sidebar/products.js'
+import { formatUserAgent } from '@/features/conversation/sidebar/userAgent.js'
 import { useEmitter } from '@/composables/useEmitter'
 import { EMITTER_EVENTS } from '@/constants/emitterEvents.js'
 import { useConversationStore } from '@/stores/conversation'
@@ -140,7 +172,7 @@ const userStore = useUserStore()
 
 const phoneNumber = computed(() => {
   const countryCodeValue = conversation.value?.contact?.phone_number_country_code || ''
-  const number = conversation.value?.contact?.phone_number || t('conversation.sidebar.notAvailable')
+  const number = conversation.value?.contact?.phone_number || ''
   if (!countryCodeValue) return number
 
   // Lookup calling code
@@ -162,15 +194,14 @@ const isVerified = computed(
   () => isLivechat.value && conversation.value?.contact?.type !== 'visitor'
 )
 
-const parsedUA = computed(() => {
-  const ua = conversation.value?.meta?.user_agent
-  if (!ua) return ''
-  const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera|MSIE|Trident)[/\s](\d+)/i)
-  const os = ua.match(/(Windows|Mac OS X|Linux|Android|iOS|iPhone|iPad)[\s/]?([0-9._]*)/i)
-  const parts = []
-  if (browser) parts.push(browser[1] + ' ' + browser[2])
-  if (os) parts.push(os[1].replace('_', ' '))
-  return parts.length > 0 ? parts.join(' / ') : ua.substring(0, 60)
+const userAgent = computed(() => formatUserAgent(conversation.value?.meta?.user_agent))
+
+// The current conversation plus the contact's previous ones; the inbox each arrived in names the product.
+const products = computed(() => {
+  const current = conversation.value
+  if (!current) return []
+  const previous = current.previous_conversations || []
+  return productsFromInboxNames([current.inbox_name, ...previous.map((c) => c.inbox_name)])
 })
 
 const contextLinks = ref([])

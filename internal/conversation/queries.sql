@@ -307,9 +307,11 @@ SELECT
     u.last_name AS "contact.last_name",
     u.avatar_url AS "contact.avatar_url",
     c.last_message as last_message,
-    c.last_message_at as last_message_at
+    c.last_message_at as last_message_at,
+    inb.name as inbox_name
 FROM users u
 JOIN conversations c ON c.contact_id = u.id
+JOIN inboxes inb ON c.inbox_id = inb.id
 WHERE c.contact_id = $1
 ORDER BY c.created_at DESC
 LIMIT $2;

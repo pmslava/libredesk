@@ -250,6 +250,7 @@ type PreviousConversation struct {
 	UpdatedAt     time.Time                   `db:"updated_at" json:"updated_at"`
 	UUID          string                      `db:"uuid" json:"uuid"`
 	Subject       string                      `db:"subject" json:"subject"`
+	InboxName     string                      `db:"inbox_name" json:"inbox_name"`
 	Contact       PreviousConversationContact `db:"contact" json:"contact"`
 	LastMessage   null.String                 `db:"last_message" json:"last_message"`
 	LastMessageAt null.Time                   `db:"last_message_at" json:"last_message_at"`
