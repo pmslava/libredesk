@@ -90,9 +90,9 @@
 
     <!-- Livechat visitor info -->
     <template v-if="isLivechat">
-      <div v-if="conversation?.contact?.country" class="flex gap-2 items-center">
+      <div v-if="countryAndLanguages" class="flex gap-2 items-center">
         <Globe size="16" class="text-muted-foreground flex-shrink-0" />
-        <span class="sidebar-value">{{ countryName }}</span>
+        <span class="sidebar-value">{{ countryAndLanguages }}</span>
       </div>
       <div v-if="conversation?.meta?.ip" class="flex gap-2 items-center">
         <Monitor size="16" class="text-muted-foreground flex-shrink-0" />
@@ -138,6 +138,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
+import { contactLanguages } from './languages'
 import { ViewVerticalIcon } from '@radix-icons/vue'
 import { Button } from '@shared-ui/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@shared-ui/components/ui/avatar'
@@ -187,6 +188,14 @@ const countryName = computed(() => {
   const c = countries.find((c) => c.iso_2 === code)
   return c ? c.name : code
 })
+
+// The country row also carries the languages the contact uses in the products
+// that report them (Drifttt writes the `language` attribute): "Serbia · English".
+const countryAndLanguages = computed(() =>
+  [countryName.value, ...contactLanguages(conversation.value?.contact?.custom_attributes)]
+    .filter(Boolean)
+    .join(' · ')
+)
 
 const isLivechat = computed(() => conversation.value?.inbox_channel === 'livechat')
 const contactStatus = computed(() => conversation.value?.contact?.availability_status)
