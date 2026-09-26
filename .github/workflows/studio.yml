@@ -1,0 +1,317 @@
+# Nightly: merge upstream/main into studio, test, build, publish the image (GHCR and the rolling release "studio"),
+# push studio.
+name: studio
+
+on:
+  schedule:
+    - cron: "30 23 * * *" # UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if the release already has this commit
+        type: boolean
+        default: false
+
+# One run at a time; a new run waits for the previous one instead of cancelling it.
+concurrency:
+  group: studio
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+
+env:
+  IMAGE: ghcr.io/pmslava/libredesk
+  # Rolling prerelease the box reads: releases/download/<RELEASE_TAG>/manifest.json (public, no token needed).
+  RELEASE_TAG: studio-build
+  GH_REPO: ${{ github.repository }}
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # Same database the Makefile's test-db target starts: 127.0.0.1:5433, libredesk/libredesk/libredesk.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - 5433:5432
+        env:
+          POSTGRES_USER: libredesk
+          POSTGRES_PASSWORD: libredesk
+          POSTGRES_DB: libredesk
+        options: >-
+          --health-cmd="pg_isready -U libredesk"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # internal/testutil default DSN, set explicitly so the integration tests never silently skip on a changed default.
+      LIBREDESK_TEST_DB_DSN: "postgres://libredesk:libredesk@127.0.0.1:5433/libredesk?sslmode=disable&connect_timeout=3"
+      # Only whether the secrets are set ("true"/"false"): `if:` cannot read secrets, and the secrets themselves
+      # stay in the few steps that use them.
+      NTFY_ENABLED: ${{ secrets.NTFY_URL != '' && secrets.NTFY_TOKEN != '' }}
+      PUSH_TOKEN_SET: ${{ secrets.STUDIO_PUSH_TOKEN != '' }}
+
+    steps:
+      # STUDIO_PUSH_TOKEN (a personal token with the workflow scope), when set, can push merges that touch
+      # .github/workflows/*; GITHUB_TOKEN cannot.
+      - name: Check out studio
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/studio # explicit: the release tag is also called studio
+          fetch-depth: 0
+          token: ${{ secrets.STUDIO_PUSH_TOKEN || github.token }}
+
+      - name: Git identity and upstream remote
+        run: |
+          git config user.name "studio bot"
+          git config user.email "studio-bot@users.noreply.github.com"
+          git remote add upstream https://github.com/abhinavxd/libredesk.git
+          git fetch upstream
+
+      # Never fails on a conflict itself: it records the conflict so the next step can report it.
+      # The merge commit is dated like its newest parent, so merging the same two heads again gives the same sha;
+      # a merge whose branch push failed is then recognised as already released and not rebuilt every night.
+      - name: Merge upstream/main
+        id: merge
+        run: |
+          echo "upstream_short=$(git rev-parse --short upstream/main)" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$(git rev-parse upstream/main)" >> "$GITHUB_OUTPUT"
+          when=$(git show -s --format=%ct HEAD upstream/main | sort -n | tail -n 1)
+          export GIT_AUTHOR_DATE="$when +0000" GIT_COMMITTER_DATE="$when +0000"
+          if git merge --no-edit upstream/main; then
+            exit 0
+          fi
+          files=$(git diff --name-only --diff-filter=U)
+          git merge --abort
+          if [ -z "$files" ]; then
+            echo "merge failed without conflicted files"; exit 1
+          fi
+          echo "conflict=true" >> "$GITHUB_OUTPUT"
+          { echo "files<<EOF"; echo "$files"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      - name: Report conflict (issue + ntfy) and fail
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          FILES: ${{ steps.merge.outputs.files }}
+          TITLE: "studio: conflict with upstream ${{ steps.merge.outputs.upstream_short }}"
+        run: |
+          list=$(printf '%s\n' "$FILES" | sed 's/^/- `/; s/$/`/')
+          body=$(printf 'Merging upstream/main (%s) into studio conflicts in:\n\n%s\n\nRun: %s\n' \
+            "${{ steps.merge.outputs.upstream_short }}" "$list" "$RUN_URL")
+          # Comment on the open issue with this exact title, or open one.
+          num=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body" || echo "::warning::could not comment on issue #$num"
+          else
+            gh issue create --title "$TITLE" --body "$body" || echo "::warning::could not create the issue (issues disabled?)"
+          fi
+          if [ -n "$NTFY_URL" ] && [ -n "$NTFY_TOKEN" ]; then
+            curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $TITLE" -H "Tags: warning" \
+              -H "Click: $RUN_URL" --data-binary "Conflicted files: $(echo $FILES)" "$NTFY_URL" \
+              || echo "::warning::ntfy push failed"
+          else
+            echo "NTFY_URL or NTFY_TOKEN not set, no ntfy push"
+          fi
+          exit 1
+
+      # Nothing new since the last release: stop building here (unless forced); the branch push below still runs.
+      - name: Skip if the release already has this commit
+        id: built
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          head=$(git rev-parse HEAD)
+          released=$(gh release download "$RELEASE_TAG" -p manifest.json -O - 2> /dev/null | jq -r '.commit // empty' || true)
+          if [ "$FORCE" != "true" ] && [ "$released" = "$head" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::release $RELEASE_TAG already has $head, nothing to build"
+          fi
+
+      - name: Set up Go (version from go.mod)
+        if: steps.built.outputs.skip != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm (version from frontend/package.json packageManager)
+        if: steps.built.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node 22
+        if: steps.built.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # Latest upstream tag by version sort; "-" -> "~" so v2.9.0 sorts after v2.9.0-rc.8.
+      - name: Compute version
+        if: steps.built.outputs.skip != 'true'
+        id: version
+        run: |
+          tag=$(git ls-remote --tags --refs upstream 'v*' | awk '{sub("refs/tags/", "", $2); print $2}' \
+            | sed 's/-/~/' | sort -V | tail -n 1 | sed 's/~/-/')
+          [ -n "$tag" ] || { echo "no upstream tag found"; exit 1; }
+          echo "version=${tag}-studio${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "::notice::version ${tag}-studio${{ github.run_number }}"
+
+      - name: Go build, vet, test
+        if: steps.built.outputs.skip != 'true'
+        run: go build ./... && go vet ./... && go test -count=1 ./...
+
+      - name: Frontend tests
+        if: steps.built.outputs.skip != 'true'
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile && pnpm test:run
+
+      # Same targets as `make build`; the Makefile installs stuffbin with go install.
+      - name: Production build
+        if: steps.built.outputs.skip != 'true'
+        env:
+          LIBREDESK_VERSION: ${{ steps.version.outputs.version }}
+        run: make frontend-build build-backend stuff && ./libredesk --version
+
+      - name: Log in to GHCR
+        if: steps.built.outputs.skip != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Docker build and push
+        if: steps.built.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.built.outputs.sha }}
+        run: |
+          docker build \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:studio" -t "$IMAGE:sha-$SHA" .
+          for t in "$VERSION" studio "sha-$SHA"; do docker push "$IMAGE:$t"; done
+
+      # The box loads this tarball; the tag inside it is the one compose.yml gets.
+      - name: Save the image and write manifest.json
+        if: steps.built.outputs.skip != 'true'
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -o pipefail
+          image="libredesk/libredesk:$VERSION"
+          asset="libredesk-$VERSION.tar.gz"
+          mkdir -p release
+          docker tag "$IMAGE:$VERSION" "$image"
+          docker save "$image" | gzip > "release/$asset"
+          jq -n --arg version "$VERSION" --arg commit "$(git rev-parse HEAD)" --arg image "$image" \
+            --arg asset "$asset" --arg sha256 "$(sha256sum "release/$asset" | cut -d' ' -f1)" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{version: $version, commit: $commit, image: $image, asset: $asset, sha256: $sha256, built_at: $built_at}' \
+            > release/manifest.json
+          cat release/manifest.json
+          ls -l release
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      # Published before the branch push, so the desk updates even when that push is refused.
+      - name: Publish the rolling release
+        if: steps.built.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ASSET: ${{ steps.package.outputs.asset }}
+          UPSTREAM: ${{ steps.merge.outputs.upstream_sha }}
+        run: |
+          head=$(git rev-parse HEAD)
+          # Moving the tag uploads the merge commit, which GITHUB_TOKEN may not do when the merge touches
+          # .github/workflows/*; the tag then stays on the current origin/studio (only the assets matter to the box).
+          if git push --force origin "$head:refs/tags/$RELEASE_TAG"; then
+            tag_at=$head
+          else
+            tag_at=$(git rev-parse refs/remotes/origin/studio)
+            echo "::warning::could not move tag $RELEASE_TAG to $head; it points at origin/studio $tag_at"
+            git push --force origin "$tag_at:refs/tags/$RELEASE_TAG"
+          fi
+          title="studio $VERSION"
+          notes=$(printf 'Nightly build `%s` of studio %s, merging upstream abhinavxd/libredesk@%s.\n\nAssets: `%s` (docker load gives `libredesk/libredesk:%s`) and `manifest.json` with its sha256.\n\nRun: %s\n' \
+            "$VERSION" "$head" "$UPSTREAM" "$ASSET" "$VERSION" "$RUN_URL")
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --prerelease --title "$title" --notes "$notes"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --prerelease --title "$title" --notes "$notes"
+          fi
+          # Tarball first, then the manifest that names it, then drop the older tarballs.
+          gh release upload "$RELEASE_TAG" "release/$ASSET" --clobber
+          gh release upload "$RELEASE_TAG" release/manifest.json --clobber
+          for name in $(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'); do
+            case $name in
+              "$ASSET") ;;
+              libredesk-*.tar.gz)
+                gh release delete-asset "$RELEASE_TAG" "$name" --yes || echo "::warning::could not delete older asset $name" ;;
+            esac
+          done
+          {
+            echo "### Release \`$RELEASE_TAG\`: $VERSION"
+            echo
+            echo "Commit $head (tag at $tag_at), upstream $UPSTREAM, asset \`$ASSET\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Also runs when the build was skipped, so a branch left behind by a refused push catches up (a no-op
+      # otherwise). Without STUDIO_PUSH_TOKEN a refused push only warns (next step); with it, it fails the run.
+      - name: Push studio
+        id: push
+        continue-on-error: ${{ env.PUSH_TOKEN_SET != 'true' }}
+        run: git push origin HEAD:refs/heads/studio
+
+      - name: Report refused branch push
+        if: steps.push.outcome == 'failure'
+        env:
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: |
+          if git diff --quiet refs/remotes/origin/studio HEAD -- .github/workflows; then
+            why="the push was rejected (see the run log)"
+          else
+            why="the merge touches .github/workflows/* and STUDIO_PUSH_TOKEN is missing"
+          fi
+          msg="The studio branch could not be updated: $why. The image and the release $RELEASE_TAG for $(git rev-parse --short=12 HEAD) are published, so the desk still updates."
+          echo "::warning::$msg"
+          {
+            echo "### Warning: studio branch not updated"
+            echo
+            echo "$msg"
+            echo
+            echo "Fix: add a repository secret STUDIO_PUSH_TOKEN (personal token with the workflow scope), then re-run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$NTFY_URL" ] && [ -n "$NTFY_TOKEN" ]; then
+            curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: studio branch not updated" -H "Tags: warning" \
+              -H "Click: $RUN_URL" --data-binary "$msg" "$NTFY_URL" || echo "::warning::ntfy push failed"
+          else
+            echo "NTFY_URL or NTFY_TOKEN not set, no ntfy push"
+          fi
+
+      - name: Notify failure
+        if: failure() && steps.merge.outputs.conflict != 'true' && env.NTFY_ENABLED == 'true'
+        env:
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: studio pipeline failed" -H "Tags: rotating_light" \
+            -H "Priority: high" -H "Click: $RUN_URL" --data-binary "Run: $RUN_URL" "$NTFY_URL"
