@@ -2,7 +2,7 @@ import { h } from 'vue'
 import dataTableDropdown from '@/features/admin/custom-attributes/dataTableDropdown.vue'
 import { Badge } from '@shared-ui/components/ui/badge'
 import { Lock } from 'lucide-vue-next'
-import { format } from 'date-fns'
+import { formatDateTime } from '@shared-ui/utils/datetime.js'
 
 export const createColumns = (t, { onEdit } = {}) => [
     {
@@ -79,7 +79,7 @@ export const createColumns = (t, { onEdit } = {}) => [
             return h(
                 'div',
                 { class: 'text-center' },
-                format(row.getValue('created_at'), 'PPpp')
+                formatDateTime(row.getValue('created_at'))
             )
         }
     },
@@ -93,7 +93,7 @@ export const createColumns = (t, { onEdit } = {}) => [
             return h(
                 'div',
                 { class: 'text-center' },
-                format(row.getValue('updated_at'), 'PPpp')
+                formatDateTime(row.getValue('updated_at'))
             )
         }
     },

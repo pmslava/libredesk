@@ -49,7 +49,7 @@
     <div>
       <p class="sidebar-label">{{ $t('globals.terms.initiatedAt') }}</p>
       <p v-if="conversation.created_at" class="sidebar-value">
-        {{ format(conversation.created_at, 'PPpp') }}
+        {{ formatDateTime(conversation.created_at) }}
       </p>
       <p v-else class="sidebar-value">-</p>
     </div>
@@ -65,7 +65,7 @@
         />
       </div>
       <p v-if="conversation.first_reply_at" class="sidebar-value">
-        {{ format(conversation.first_reply_at, 'PPpp') }}
+        {{ formatDateTime(conversation.first_reply_at) }}
       </p>
       <p v-else class="sidebar-value">-</p>
     </div>
@@ -81,7 +81,7 @@
         />
       </div>
       <p v-if="conversation.resolved_at" class="sidebar-value">
-        {{ format(conversation.resolved_at, 'PPpp') }}
+        {{ formatDateTime(conversation.resolved_at) }}
       </p>
       <p v-else class="sidebar-value">-</p>
     </div>
@@ -97,7 +97,7 @@
         />
       </div>
       <p v-if="conversation.last_reply_at" class="sidebar-value">
-        {{ format(conversation.last_reply_at, 'PPpp') }}
+        {{ formatDateTime(conversation.last_reply_at) }}
       </p>
       <p v-else class="sidebar-value">-</p>
     </div>
@@ -105,7 +105,7 @@
     <div v-if="conversation.closed_at">
       <p class="sidebar-label">{{ $t('globals.terms.closedAt') }}</p>
       <p class="sidebar-value">
-        {{ format(conversation.closed_at, 'PPpp') }}
+        {{ formatDateTime(conversation.closed_at) }}
       </p>
     </div>
 
@@ -155,7 +155,7 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
-import { format } from 'date-fns'
+import { formatDateTime } from '@shared-ui/utils/datetime.js'
 import { Mail, MessageSquare, Pencil } from 'lucide-vue-next'
 import { Input } from '@shared-ui/components/ui/input'
 import SlaBadge from '@/features/sla/SlaBadge.vue'
