@@ -47,7 +47,7 @@ type priorityUpdateReq struct {
 }
 
 type subjectUpdateReq struct {
-	Subject string `json:"subject"`
+	Subject *string `json:"subject"`
 }
 
 type statusUpdateReq struct {
@@ -667,7 +667,11 @@ func handleUpdateConversationSubject(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("errors.parsingRequest"), nil, envelope.InputError)
 	}
 
-	subject, ok := normalizeConversationSubject(req.Subject)
+	if req.Subject == nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.Ts("globals.messages.empty", "name", "`subject`"), nil, envelope.InputError)
+	}
+
+	subject, ok := normalizeConversationSubject(*req.Subject)
 	if !ok {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.Ts("globals.messages.maxLength", "max", strconv.Itoa(maxConversationSubjectLength)), nil, envelope.InputError)
 	}
