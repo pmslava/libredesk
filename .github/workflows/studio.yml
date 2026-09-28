@@ -96,7 +96,7 @@ jobs:
           echo "conflict=true" >> "$GITHUB_OUTPUT"
           { echo "files<<EOF"; echo "$files"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - name: Report conflict (issue + ntfy) and fail
+      - name: Report conflict (ntfy + issue) and fail
         if: steps.merge.outputs.conflict == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -105,23 +105,26 @@ jobs:
           FILES: ${{ steps.merge.outputs.files }}
           TITLE: "studio: conflict with upstream ${{ steps.merge.outputs.upstream_short }}"
         run: |
-          list=$(printf '%s\n' "$FILES" | sed 's/^/- `/; s/$/`/')
-          body=$(printf 'Merging upstream/main (%s) into studio conflicts in:\n\n%s\n\nRun: %s\n' \
-            "${{ steps.merge.outputs.upstream_short }}" "$list" "$RUN_URL")
-          # Comment on the open issue with this exact title, or open one.
-          num=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
-            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
-          if [ -n "$num" ]; then
-            gh issue comment "$num" --body "$body" || echo "::warning::could not comment on issue #$num"
-          else
-            gh issue create --title "$TITLE" --body "$body" || echo "::warning::could not create the issue (issues disabled?)"
-          fi
+          # The push goes first, so nothing in the issue part below can keep it from being sent.
           if [ -n "$NTFY_URL" ] && [ -n "$NTFY_TOKEN" ]; then
             curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $TITLE" -H "Tags: warning" \
               -H "Click: $RUN_URL" --data-binary "Conflicted files: $(echo $FILES)" "$NTFY_URL" \
               || echo "::warning::ntfy push failed"
           else
             echo "NTFY_URL or NTFY_TOKEN not set, no ntfy push"
+          fi
+          list=$(printf '%s\n' "$FILES" | sed 's/^/- `/; s/$/`/')
+          body=$(printf 'Merging upstream/main (%s) into studio conflicts in:\n\n%s\n\nRun: %s\n' \
+            "${{ steps.merge.outputs.upstream_short }}" "$list" "$RUN_URL")
+          # Comment on the open issue with this exact title, or open one. The fork has issues disabled, which makes
+          # gh issue list fail; that is logged and the step goes on to fail on the conflict.
+          if ! num=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty"); then
+            echo "issues are disabled on this repository"
+          elif [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body" || echo "::warning::could not comment on issue #$num"
+          else
+            gh issue create --title "$TITLE" --body "$body" || echo "::warning::could not create the issue"
           fi
           exit 1
 
