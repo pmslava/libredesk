@@ -106,16 +106,19 @@ func (e *Email) dialIMAP(cfg imodels.IMAPConfig) (*imapclient.Client, error) {
 			token:    oauthConfig.AccessToken,
 		}
 		if err := client.Authenticate(saslClient); err != nil {
+			e.flagAuthError()
 			client.Logout()
 			return nil, fmt.Errorf("error authenticating with OAuth to IMAP server: %w", err)
 		}
-		return client, nil
+	} else {
+		if err := client.Login(cfg.Username, cfg.Password).Wait(); err != nil {
+			e.flagAuthError()
+			client.Logout()
+			return nil, fmt.Errorf("error logging in to the IMAP server: %w", err)
+		}
 	}
+	e.clearAuthError()
 
-	if err := client.Login(cfg.Username, cfg.Password).Wait(); err != nil {
-		client.Logout()
-		return nil, fmt.Errorf("error logging in to the IMAP server: %w", err)
-	}
 	return client, nil
 }
 

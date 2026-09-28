@@ -75,6 +75,20 @@
         {{ conversation.contact.external_user_id }}
       </span>
     </div>
+    <div
+      v-for="identity in conversation?.contact?.channel_identities"
+      :key="identity.channel + identity.identifier"
+      class="flex gap-2 items-center"
+    >
+      <WhatsAppIcon
+        v-if="identity.channel === 'whatsapp'"
+        class="size-4 text-muted-foreground flex-shrink-0"
+      />
+      <IdCard v-else size="16" class="text-muted-foreground flex-shrink-0" />
+      <span class="sidebar-value break-all">
+        {{ identity.channel === 'whatsapp' ? '+' + identity.identifier : identity.identifier }}
+      </span>
+    </div>
 
     <div v-if="conversation?.contact?.country" class="flex gap-2 items-center">
       <Globe size="16" class="text-muted-foreground flex-shrink-0" />
@@ -137,6 +151,7 @@ import {
   ShieldQuestion
 } from 'lucide-vue-next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@shared-ui/components/ui/tooltip'
+import WhatsAppIcon from '@main/components/icons/WhatsAppIcon.vue'
 import countries from '@shared-ui/constants/countries.js'
 import { formatUserAgent } from './userAgent.js'
 import { useEmitter } from '@/composables/useEmitter'
@@ -156,10 +171,9 @@ const phoneNumber = computed(() => {
   const number = conversation.value?.contact?.phone_number
   if (!countryCodeValue) return number
 
-  // Lookup calling code
   const country = countries.find((c) => c.iso_2 === countryCodeValue)
-  const callingCode = country ? country.calling_code : countryCodeValue
-  return `${callingCode} ${number}`
+  if (!country) return number
+  return `${country.calling_code} ${number}`
 })
 
 const countryName = computed(() => {

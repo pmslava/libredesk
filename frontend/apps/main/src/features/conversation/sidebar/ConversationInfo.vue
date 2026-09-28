@@ -4,7 +4,7 @@
       <p class="sidebar-label">{{ $t('globals.terms.inbox', 1) }}</p>
       <div class="flex items-center gap-1.5">
         <component
-          :is="conversation.inbox_channel === 'livechat' ? MessageSquare : Mail"
+          :is="channelIcon"
           class="size-3.5 text-muted-foreground flex-shrink-0"
         />
         <p class="sidebar-value break-all">{{ conversation.inbox_name }}</p>
@@ -156,18 +156,19 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { formatDateTime } from '@shared-ui/utils/datetime.js'
-import { Mail, MessageSquare, Pencil } from 'lucide-vue-next'
+import { Mail, Pencil } from 'lucide-vue-next'
 import { Input } from '@shared-ui/components/ui/input'
+import { CHANNEL_ICONS } from '@main/constants/channelIcons.js'
 import SlaBadge from '@/features/sla/SlaBadge.vue'
-import { useConversationStore } from '../../../stores/conversation'
-import { useUserStore } from '../../../stores/user'
+import { useConversationStore } from '@main/stores/conversation'
+import { useUserStore } from '@main/stores/user'
 import CustomAttributes from '@/features/conversation/sidebar/CustomAttributes.vue'
-import { useCustomAttributeStore } from '../../../stores/customAttributes'
-import { EMITTER_EVENTS } from '../../../constants/emitterEvents.js'
-import { useEmitter } from '../../../composables/useEmitter'
+import { useCustomAttributeStore } from '@main/stores/customAttributes'
+import { EMITTER_EVENTS } from '@main/constants/emitterEvents.js'
+import { useEmitter } from '@main/composables/useEmitter'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { csatRatingEmoji, csatRatingTextKey } from '@shared-ui/utils/csat.js'
-import api from '../../../api'
+import api from '@main/api'
 import { useI18n } from 'vue-i18n'
 
 const emitter = useEmitter()
@@ -176,6 +177,8 @@ const customAttributeStore = useCustomAttributeStore()
 const conversationStore = useConversationStore()
 const userStore = useUserStore()
 const conversation = computed(() => conversationStore.current)
+
+const channelIcon = computed(() => CHANNEL_ICONS[conversation.value?.inbox_channel] || Mail)
 customAttributeStore.fetchCustomAttributes()
 
 const canEditSubject = computed(() => userStore.can('conversations:write'))
