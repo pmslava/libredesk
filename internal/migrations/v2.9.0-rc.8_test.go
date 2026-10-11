@@ -243,7 +243,7 @@ func TestV2_9_0CustomAttributeReadOnlyColumn(t *testing.T) {
 
 	// Running the migration twice verifies that adding the column is idempotent.
 	for range 2 {
-		if err := V2_9_0(db, nil, nil); err != nil {
+		if err := V2_9_0_RC8(db, nil, nil); err != nil {
 			t.Fatalf("running migration: %v", err)
 		}
 	}
@@ -284,7 +284,7 @@ func TestV2_9_0ExternalSyncColumn(t *testing.T) {
 
 	// Running the migration twice verifies that adding the column is idempotent.
 	for range 2 {
-		if err := V2_9_0(db, nil, nil); err != nil {
+		if err := V2_9_0_RC8(db, nil, nil); err != nil {
 			t.Fatalf("running migration: %v", err)
 		}
 	}
@@ -360,7 +360,7 @@ func TestV2_9_0DeleteConversationPermissionMigration(t *testing.T) {
 
 	// Running the migration twice verifies that it does not append duplicates.
 	for range 2 {
-		if err := V2_9_0(db, nil, nil); err != nil {
+		if err := V2_9_0_RC8(db, nil, nil); err != nil {
 			t.Fatalf("running migration: %v", err)
 		}
 	}
