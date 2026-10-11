@@ -98,7 +98,7 @@ func (e *Email) purgeFromMailbox(ctx context.Context, cfg imodels.IMAPConfig, pe
 	}
 	defer client.Logout()
 
-	// Read-write, unlike the scan, which selects the mailbox read-only.
+	// Read-write: the purge moves, flags and expunges mails in the selected mailbox.
 	if _, err := client.Select(cfg.Mailbox, nil).Wait(); err != nil {
 		return fmt.Errorf("error selecting mailbox %q: %w", cfg.Mailbox, err)
 	}
