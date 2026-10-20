@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"strings"
 	"sync"
 
 	"github.com/abhinavxd/libredesk/internal/dbutil"
@@ -27,13 +28,14 @@ var (
 
 // Manager handles template-related operations.
 type Manager struct {
-	mutex   sync.RWMutex
-	tpls    *template.Template
-	webTpls *template.Template
-	funcMap template.FuncMap
-	q       queries
-	lo      *logf.Logger
-	i18n    *i18n.I18n
+	mutex            sync.RWMutex
+	tpls             *template.Template
+	notificationTpls *template.Template
+	webTpls          *template.Template
+	funcMap          template.FuncMap
+	q                queries
+	lo               *logf.Logger
+	i18n             *i18n.I18n
 }
 
 // queries contains prepared SQL queries.
@@ -54,15 +56,11 @@ func New(lo *logf.Logger, db *sqlx.DB, webTpls *template.Template, tpls *templat
 	if err := dbutil.ScanSQLFile("queries.sql", &q, db, efs); err != nil {
 		return nil, err
 	}
-	return &Manager{
-		mutex:   sync.RWMutex{},
-		tpls:    tpls,
-		webTpls: webTpls,
-		funcMap: funcMap,
-		q:       q,
-		lo:      lo,
-		i18n:    i18n,
-	}, nil
+	m := &Manager{q: q, lo: lo, i18n: i18n}
+	if err := m.Reload(webTpls, tpls, funcMap); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Update updates a new template with the given name, and body.
@@ -131,6 +129,15 @@ func (m *Manager) Delete(id int) error {
 	return nil
 }
 
+// DefaultOutgoingEmailTemplateContains reports whether the default outgoing email template body contains s.
+func (m *Manager) DefaultOutgoingEmailTemplateContains(s string) bool {
+	t, err := m.getDefaultOutgoingEmailTemplate()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(t.Body, s)
+}
+
 // isBuiltIn returns true if the template is built-in.
 func (m *Manager) isBuiltIn(id int) (bool, error) {
 	var isBuiltIn bool
@@ -171,8 +178,17 @@ func (m *Manager) getByName(name string) (models.Template, error) {
 func (m *Manager) Reload(webTpls, tpls *template.Template, funcMap template.FuncMap) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+	var notificationTpls *template.Template
+	if tpls != nil {
+		var err error
+		notificationTpls, err = tpls.Clone()
+		if err != nil {
+			return fmt.Errorf("cloning notification templates: %w", err)
+		}
+	}
 	m.webTpls = webTpls
 	m.tpls = tpls
+	m.notificationTpls = notificationTpls
 	m.funcMap = funcMap
 	return nil
 }

@@ -67,6 +67,14 @@ SELECT
     conversations.priority_id,
     conversations.assigned_user_id,
     conversations.assigned_team_id,
+    CASE WHEN assignee.id IS NULL THEN 'null'::json ELSE json_build_object(
+        'id', assignee.id,
+        'first_name', assignee.first_name,
+        'last_name', assignee.last_name,
+        'avatar_url', assignee.avatar_url,
+        'type', assignee.type,
+        'availability_status', assignee.availability_status
+    ) END AS assignee,
     (
     SELECT CASE WHEN COUNT(*) > 9 THEN 10 ELSE COUNT(*) END
     FROM (
@@ -102,6 +110,8 @@ SELECT
     ) ELSE NULL END as mentioned_message_uuid
     FROM conversations
     JOIN users ON contact_id = users.id
+    LEFT JOIN users assignee ON conversations.assigned_user_id = assignee.id
+        AND assignee.deleted_at IS NULL AND (assignee.email != 'System' OR assignee.type = 'ai_assistant')
     JOIN inboxes ON inbox_id = inboxes.id  
     LEFT JOIN conversation_statuses ON status_id = conversation_statuses.id
     LEFT JOIN conversation_priorities ON priority_id = conversation_priorities.id
@@ -152,6 +162,14 @@ SELECT
     conversations.priority_id,
     conversations.assigned_user_id,
     conversations.assigned_team_id,
+    CASE WHEN assignee.id IS NULL THEN 'null'::json ELSE json_build_object(
+        'id', assignee.id,
+        'first_name', assignee.first_name,
+        'last_name', assignee.last_name,
+        'avatar_url', assignee.avatar_url,
+        'type', assignee.type,
+        'availability_status', assignee.availability_status
+    ) END AS assignee,
     conversation_statuses.name as status,
     conversation_priorities.name as priority,
     as_latest.first_response_deadline_at,
@@ -161,6 +179,8 @@ SELECT
     nxt_resp_event.met_at as next_response_met_at
 FROM conversations
 JOIN users ON contact_id = users.id
+LEFT JOIN users assignee ON conversations.assigned_user_id = assignee.id
+    AND assignee.deleted_at IS NULL AND (assignee.email != 'System' OR assignee.type = 'ai_assistant')
 JOIN inboxes ON inbox_id = inboxes.id
 LEFT JOIN conversation_statuses ON status_id = conversation_statuses.id
 LEFT JOIN conversation_priorities ON priority_id = conversation_priorities.id
@@ -208,6 +228,14 @@ SELECT
    c.snoozed_until,
    c.assigned_user_id,
    c.assigned_team_id,
+   CASE WHEN assignee.id IS NULL THEN 'null'::json ELSE json_build_object(
+       'id', assignee.id,
+       'first_name', assignee.first_name,
+       'last_name', assignee.last_name,
+       'avatar_url', assignee.avatar_url,
+       'type', assignee.type,
+       'availability_status', assignee.availability_status
+   ) END AS assignee,
    c.subject,
    c.contact_id,
    c.sla_policy_id,
@@ -260,6 +288,8 @@ SELECT
    csat.response_timestamp as csat_responded_at
 FROM conversations c
 JOIN users ct ON c.contact_id = ct.id
+LEFT JOIN users assignee ON c.assigned_user_id = assignee.id
+    AND assignee.deleted_at IS NULL AND (assignee.email != 'System' OR assignee.type = 'ai_assistant')
 JOIN inboxes inb ON c.inbox_id = inb.id
 LEFT JOIN LATERAL (
     SELECT rating, feedback, response_timestamp
@@ -640,6 +670,14 @@ FROM conversation_participants
 INNER JOIN users ON users.id = conversation_participants.user_id
 WHERE conversation_participants.conversation_id = (SELECT id FROM conversations WHERE uuid = $1)
   AND users.type = 'agent'
+  AND EXISTS (
+      SELECT 1 FROM conversation_messages m
+      WHERE m.conversation_id = conversation_participants.conversation_id
+        AND m.sender_id = users.id
+        AND m.sender_type = 'agent'
+        AND m.type = 'outgoing'
+        AND NOT m.private
+  )
   AND users.email != 'System'
   AND users.enabled
   AND users.deleted_at IS NULL;
@@ -849,6 +887,37 @@ and source_id > ''
 ORDER BY id DESC
 LIMIT $2;
 
+-- name: get-previous-messages
+SELECT
+    m.created_at,
+    m.type = 'incoming' AS is_incoming,
+    COALESCE(m.content, '') AS content,
+    COALESCE(m.text_content, '') AS text_content,
+    COALESCE(m.content_type::text, '') AS content_type,
+    u.first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    COALESCE(u.email, '') AS email
+FROM conversation_messages m
+JOIN conversations c ON c.id = m.conversation_id
+JOIN users u ON u.id = m.sender_id
+JOIN users ct ON ct.id = c.contact_id
+WHERE m.conversation_id = $1
+AND m.id < $2
+AND m.private = false
+AND m.status != 'failed'
+AND NOT COALESCE((m.meta->>'continuity_email')::boolean, false)
+AND NOT COALESCE((m.meta->>'is_csat')::boolean, false)
+AND (
+    (m.type = 'incoming' AND m.sender_id = c.contact_id)
+    OR (m.type = 'outgoing' AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(COALESCE(m.meta->'to', '[]'::jsonb) || COALESCE(m.meta->'cc', '[]'::jsonb)) AS r(addr)
+        WHERE lower(r.addr) = lower(ct.email)
+    ))
+)
+ORDER BY m.id DESC
+LIMIT $3;
+
 -- name: get-email-sender-message
 SELECT m.type, m.meta
 FROM conversation_messages m
@@ -885,7 +954,8 @@ SELECT
     c.uuid as conversation_uuid,
     c.subject,
     c.contact_id as message_receiver_id,
-    c.subject
+    c.subject,
+    c.reference_number
 FROM conversation_messages m
 INNER JOIN conversations c ON c.id = m.conversation_id
 WHERE m.status = 'pending' AND m.type = 'outgoing' AND m.private = false

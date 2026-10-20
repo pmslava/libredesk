@@ -1,120 +1,105 @@
 <template>
   <div class="space-y-3">
-    <div v-if="conversation.inbox_name">
-      <p class="sidebar-label">{{ $t('globals.terms.inbox', 1) }}</p>
-      <div class="flex items-center gap-1.5">
-        <component
-          :is="channelIcon"
-          class="size-3.5 text-muted-foreground flex-shrink-0"
-        />
-        <p class="sidebar-value break-all">{{ conversation.inbox_name }}</p>
-      </div>
-    </div>
+    <dl :class="INFO_GRID_CLASS">
+      <template v-if="conversation.inbox_name">
+        <dt class="sidebar-label">{{ $t('globals.terms.inbox', 1) }}</dt>
+        <dd :class="INFO_VALUE_CLASS">
+          <div class="flex items-start justify-end gap-1.5">
+            <component
+              :is="channelIcon"
+              class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span class="min-w-0">{{ conversation.inbox_name }}</span>
+          </div>
+        </dd>
+      </template>
 
-    <div v-if="conversation.subject || canEditSubject" class="group/subject">
-      <p class="sidebar-label">{{ $t('globals.terms.subject') }}</p>
-      <Input
-        v-if="editingSubject"
-        ref="subjectInputRef"
-        v-model="subjectDraft"
-        maxlength="255"
-        class="h-7 text-xs px-2"
-        @keydown.enter="saveSubject"
-        @keydown.esc="editingSubject = false"
-        @blur="editingSubject = false"
-      />
-      <div v-else class="flex items-center justify-between gap-1">
-        <p class="sidebar-value break-all">
-          {{ conversation.subject || '-' }}
-        </p>
-        <button
-          v-if="canEditSubject"
-          type="button"
-          class="p-1 rounded-md hover:bg-muted cursor-pointer flex-shrink-0 transition-opacity can-hover:opacity-0 can-hover:group-hover/subject:opacity-100 focus-visible:!opacity-100"
-          :aria-label="$t('globals.messages.edit')"
-          @click="startEditingSubject"
-        >
-          <Pencil size="12" class="text-muted-foreground" />
-        </button>
-      </div>
-    </div>
+      <template v-if="conversation.subject || canEditSubject">
+        <dt class="sidebar-label">{{ $t('globals.terms.subject') }}</dt>
+        <dd :class="INFO_VALUE_CLASS" class="group/subject">
+          <Input
+            v-if="editingSubject"
+            ref="subjectInputRef"
+            v-model="subjectDraft"
+            maxlength="255"
+            class="h-7 text-xs px-2"
+            @keydown.enter="saveSubject"
+            @keydown.esc="editingSubject = false"
+            @blur="editingSubject = false"
+          />
+          <div v-else class="flex items-start justify-end gap-1">
+            <span class="min-w-0">{{ conversation.subject || '-' }}</span>
+            <button
+              v-if="canEditSubject"
+              type="button"
+              class="p-1 rounded-md hover:bg-muted cursor-pointer shrink-0 transition-opacity can-hover:opacity-0 can-hover:group-hover/subject:opacity-100 focus-visible:!opacity-100"
+              :aria-label="$t('globals.messages.edit')"
+              @click="startEditingSubject"
+            >
+              <Pencil size="12" class="text-muted-foreground" aria-hidden="true" />
+            </button>
+          </div>
+        </dd>
+      </template>
 
-    <div>
-      <p class="sidebar-label">{{ $t('globals.terms.referenceNumber') }}</p>
-      <p class="sidebar-value">
-        {{ conversation.reference_number }}
-      </p>
-    </div>
+      <dt class="sidebar-label">{{ $t('globals.terms.referenceNumber') }}</dt>
+      <dd :class="INFO_VALUE_CLASS">{{ conversation.reference_number }}</dd>
 
-    <div>
-      <p class="sidebar-label">{{ $t('globals.terms.initiatedAt') }}</p>
-      <p v-if="conversation.created_at" class="sidebar-value">
-        {{ formatDateTime(conversation.created_at) }}
-      </p>
-      <p v-else class="sidebar-value">-</p>
-    </div>
+      <dt class="sidebar-label">{{ $t('globals.terms.initiatedAt') }}</dt>
+      <dd :class="INFO_VALUE_CLASS">
+        {{ conversation.created_at ? formatDateTime(conversation.created_at) : '-' }}
+      </dd>
 
-    <div>
-      <div class="flex items-center gap-2">
-        <p class="sidebar-label">{{ $t('globals.terms.firstReplyAt') }}</p>
+      <dt class="sidebar-label flex flex-wrap items-center gap-1.5">
+        <span>{{ $t('globals.terms.firstReplyAt') }}</span>
         <SlaBadge
           v-if="conversation.first_response_deadline_at"
           :dueAt="conversation.first_response_deadline_at"
           :actualAt="conversation.first_reply_at"
           :key="`${conversation.uuid}-${conversation.first_response_deadline_at}-${conversation.first_reply_at}`"
         />
-      </div>
-      <p v-if="conversation.first_reply_at" class="sidebar-value">
-        {{ formatDateTime(conversation.first_reply_at) }}
-      </p>
-      <p v-else class="sidebar-value">-</p>
-    </div>
+      </dt>
+      <dd :class="INFO_VALUE_CLASS">
+        {{ conversation.first_reply_at ? formatDateTime(conversation.first_reply_at) : '-' }}
+      </dd>
 
-    <div>
-      <div class="flex items-center gap-2">
-        <p class="sidebar-label">{{ $t('globals.terms.resolvedAt') }}</p>
+      <dt class="sidebar-label flex flex-wrap items-center gap-1.5">
+        <span>{{ $t('globals.terms.resolvedAt') }}</span>
         <SlaBadge
           v-if="conversation.resolution_deadline_at"
           :dueAt="conversation.resolution_deadline_at"
           :actualAt="conversation.resolved_at"
           :key="`${conversation.uuid}-${conversation.resolution_deadline_at}-${conversation.resolved_at}`"
         />
-      </div>
-      <p v-if="conversation.resolved_at" class="sidebar-value">
-        {{ formatDateTime(conversation.resolved_at) }}
-      </p>
-      <p v-else class="sidebar-value">-</p>
-    </div>
+      </dt>
+      <dd :class="INFO_VALUE_CLASS">
+        {{ conversation.resolved_at ? formatDateTime(conversation.resolved_at) : '-' }}
+      </dd>
 
-    <div>
-      <div class="flex items-center gap-2">
-        <p class="sidebar-label">{{ $t('globals.terms.lastReplyAt') }}</p>
+      <dt class="sidebar-label flex flex-wrap items-center gap-1.5">
+        <span>{{ $t('globals.terms.lastReplyAt') }}</span>
         <SlaBadge
           v-if="conversation.next_response_deadline_at"
           :dueAt="conversation.next_response_deadline_at"
           :actualAt="conversation.next_response_met_at"
           :key="`${conversation.uuid}-${conversation.next_response_deadline_at}-${conversation.next_response_met_at}`"
         />
-      </div>
-      <p v-if="conversation.last_reply_at" class="sidebar-value">
-        {{ formatDateTime(conversation.last_reply_at) }}
-      </p>
-      <p v-else class="sidebar-value">-</p>
-    </div>
+      </dt>
+      <dd :class="INFO_VALUE_CLASS">
+        {{ conversation.last_reply_at ? formatDateTime(conversation.last_reply_at) : '-' }}
+      </dd>
 
-    <div v-if="conversation.closed_at">
-      <p class="sidebar-label">{{ $t('globals.terms.closedAt') }}</p>
-      <p class="sidebar-value">
-        {{ formatDateTime(conversation.closed_at) }}
-      </p>
-    </div>
+      <template v-if="conversation.closed_at">
+        <dt class="sidebar-label">{{ $t('globals.terms.closedAt') }}</dt>
+        <dd :class="INFO_VALUE_CLASS">{{ formatDateTime(conversation.closed_at) }}</dd>
+      </template>
 
-    <div v-if="conversation.sla_policy_name">
-      <p class="sidebar-label">{{ $t('globals.terms.slaPolicy') }}</p>
-      <p class="sidebar-value">
-        {{ conversation.sla_policy_name }}
-      </p>
-    </div>
+      <template v-if="conversation.sla_policy_name">
+        <dt class="sidebar-label">{{ $t('globals.terms.slaPolicy') }}</dt>
+        <dd :class="INFO_VALUE_CLASS">{{ conversation.sla_policy_name }}</dd>
+      </template>
+    </dl>
 
     <CustomAttributes
       v-if="customAttributeStore.conversationAttributeOptions.length > 0"
@@ -124,32 +109,45 @@
       @update:setattributes="updateCustomAttributes"
     />
 
-    <div v-if="conversation.csat_responded_at && conversation.csat_rating">
-      <p class="sidebar-label">{{ $t('globals.terms.csatRating') }}</p>
-      <div class="flex items-center gap-2">
-        <span class="text-lg">{{ csatRatingEmoji(conversation.csat_rating) }}</span>
-        <span class="sidebar-value">{{ $t(csatRatingTextKey(conversation.csat_rating)) }}</span>
-        <span class="text-xs text-muted-foreground">{{ conversation.csat_rating }}/5</span>
-      </div>
-    </div>
+    <dl
+      v-if="
+        conversation.csat_responded_at && (conversation.csat_rating || conversation.csat_feedback)
+      "
+      :class="INFO_GRID_CLASS"
+    >
+      <template v-if="conversation.csat_rating">
+        <dt class="sidebar-label">{{ $t('globals.terms.csatRating') }}</dt>
+        <dd :class="INFO_VALUE_CLASS">
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <span class="text-lg">{{ csatRatingEmoji(conversation.csat_rating) }}</span>
+            <span>{{ $t(csatRatingTextKey(conversation.csat_rating)) }}</span>
+            <span class="text-xs text-muted-foreground">{{ conversation.csat_rating }}/5</span>
+          </div>
+        </dd>
+      </template>
 
-    <div v-if="conversation.csat_responded_at && conversation.csat_feedback">
-      <p class="sidebar-label">{{ $t('globals.terms.csatFeedback') }}</p>
-      <p
-        class="sidebar-value italic whitespace-pre-wrap"
-        :class="{ 'line-clamp-3': isFeedbackLong && !feedbackExpanded }"
-      >
-        {{ conversation.csat_feedback }}
-      </p>
-      <button
-        v-if="isFeedbackLong"
-        type="button"
-        class="text-xs text-muted-foreground hover:text-foreground mt-1"
-        @click="feedbackExpanded = !feedbackExpanded"
-      >
-        {{ feedbackExpanded ? $t('globals.messages.showLess') : $t('globals.messages.showMore') }}
-      </button>
-    </div>
+      <template v-if="conversation.csat_feedback">
+        <dt class="sidebar-label col-span-2">{{ $t('globals.terms.csatFeedback') }}</dt>
+        <dd class="col-span-2 min-w-0">
+          <p
+            class="sidebar-value italic whitespace-pre-wrap [overflow-wrap:anywhere]"
+            :class="{ 'line-clamp-3': isFeedbackLong && !feedbackExpanded }"
+          >
+            {{ conversation.csat_feedback }}
+          </p>
+          <button
+            v-if="isFeedbackLong"
+            type="button"
+            class="text-xs text-muted-foreground hover:text-foreground mt-1"
+            @click="feedbackExpanded = !feedbackExpanded"
+          >
+            {{
+              feedbackExpanded ? $t('globals.messages.showLess') : $t('globals.messages.showMore')
+            }}
+          </button>
+        </dd>
+      </template>
+    </dl>
   </div>
 </template>
 
@@ -170,6 +168,9 @@ import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { csatRatingEmoji, csatRatingTextKey } from '@shared-ui/utils/csat.js'
 import api from '@main/api'
 import { useI18n } from 'vue-i18n'
+
+const INFO_GRID_CLASS = 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-x-4 gap-y-3'
+const INFO_VALUE_CLASS = 'sidebar-value min-w-0 text-right [overflow-wrap:anywhere]'
 
 const emitter = useEmitter()
 const { t } = useI18n()
@@ -204,10 +205,11 @@ const feedbackExpanded = ref(false)
 const isFeedbackLong = computed(() => (conversation.value?.csat_feedback?.length || 0) > 160)
 
 const updateCustomAttributes = async (attributes) => {
-  let previousAttributes = conversationStore.current.custom_attributes
+  const conv = conversationStore.current
+  let previousAttributes = conv.custom_attributes
   try {
-    conversationStore.current.custom_attributes = attributes
-    await api.updateConversationCustomAttribute(conversation.value.uuid, attributes)
+    conv.custom_attributes = attributes
+    await api.updateConversationCustomAttribute(conv.uuid, attributes)
     emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
       description: t('globals.messages.savedSuccessfully')
     })
@@ -216,7 +218,7 @@ const updateCustomAttributes = async (attributes) => {
       variant: 'destructive',
       description: handleHTTPError(error).message
     })
-    conversationStore.current.custom_attributes = previousAttributes
+    conv.custom_attributes = previousAttributes
   }
 }
 </script>

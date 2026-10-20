@@ -65,6 +65,7 @@
             this.isMobile = window.innerWidth <= this.MOBILE_BREAKPOINT;
             this.isExpanded = false;
             this.hideLauncher = config.hideLauncher || false;
+            this.language = config.language || '';
             this.widgetLoaded = false;
             this._onShowCallback = null;
             this._onHideCallback = null;
@@ -319,7 +320,9 @@
             this.widgetButtonWrapper = widgetButtonWrapper;
 
             this.iframe = document.createElement('iframe');
-            this.iframe.src = `${this.config.baseURL}/widget?inbox_id=${encodeURIComponent(this.config.inboxID)}&parent_origin=${encodeURIComponent(window.location.origin)}`;
+            this.iframe.src = `${this.config.baseURL}/widget?inbox_id=${encodeURIComponent(this.config.inboxID)}&parent_origin=${encodeURIComponent(window.location.origin)}` +
+                (this.language ? `&lang=${encodeURIComponent(this.language)}` : '');
+            this.iframeLanguage = this.language;
             this.iframe.title = 'libredesk';
             this.iframe.style.cssText = `
                 position: fixed;
@@ -409,7 +412,7 @@
         }
 
         getNormalIframeHeight () {
-            return `min(${this.IFRAME_HEIGHT}, calc(100vh - ${this.iframeBottomOffset() + this.LAUNCHER_IFRAME_GAP}px))`;
+            return `min(${this.IFRAME_HEIGHT}, calc(100dvh - ${this.iframeBottomOffset() + this.LAUNCHER_IFRAME_GAP}px))`;
         }
 
         sendPageInfo () {
@@ -457,7 +460,7 @@
 
             if (this.isExpanded) {
                 iframe.style.width = this.EXPANDED_WIDTH;
-                iframe.style.height = 'calc(100vh - 40px)';
+                iframe.style.height = 'calc(100dvh - 40px)';
                 iframe.style.bottom = '20px';
             } else {
                 iframe.style.width = this.IFRAME_WIDTH;
@@ -598,6 +601,10 @@
             this.widgetLoaded = true;
             this.updateLauncherVisibility();
             this.renderPreviews();
+            // setLanguage() may have been called before the iframe loaded.
+            if (this.language !== this.iframeLanguage) {
+                this.postToIframe({ type: 'SET_LANGUAGE', language: this.language });
+            }
         }
 
         toggle () {
@@ -667,8 +674,8 @@
 
         applyLauncherScale () {
             if (!this.toggleButton) return;
-            const base = this.isChatVisible ? this.LAUNCHER_OPEN_SCALE : 1;
-            const scale = this.isLauncherHovered ? base * this.LAUNCHER_HOVER_SCALE : base;
+            const base = !this.reducedMotion && this.isChatVisible ? this.LAUNCHER_OPEN_SCALE : 1;
+            const scale = !this.reducedMotion && this.isLauncherHovered ? base * this.LAUNCHER_HOVER_SCALE : base;
             this.toggleButton.style.transform = `scale(${scale})`;
         }
 
@@ -938,6 +945,13 @@
         setUser (jwt) {
             this.clearPreviews();
             this.postToIframe({ type: 'SET_JWT_TOKEN', jwt: jwt });
+        }
+
+        setLanguage (language) {
+            this.language = language || '';
+            if (this.widgetLoaded) {
+                this.postToIframe({ type: 'SET_LANGUAGE', language: this.language });
+            }
         }
 
         logout () {
