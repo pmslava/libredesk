@@ -1,6 +1,5 @@
 import { h } from 'vue'
-import { format } from 'date-fns'
-import { timePattern } from '@shared-ui/utils/datetime.js'
+import TableDate from '@main/components/table/TableDate.vue'
 
 const conversationHref = (uuid) => `/inboxes/all/conversation/${uuid}`
 
@@ -47,8 +46,9 @@ export const createSuggestionColumns = (t, { onReview } = {}) => [
   },
   {
     accessorKey: 'created_at',
+    meta: { compact: true },
     enableGlobalFilter: false,
     header: () => t('globals.terms.createdAt'),
-    cell: ({ row }) => format(row.getValue('created_at'), `PP, ${timePattern()}`)
+    cell: ({ row }) => h(TableDate, { value: row.getValue('created_at') })
   }
 ]

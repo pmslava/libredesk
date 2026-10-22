@@ -2,16 +2,16 @@ import { h } from 'vue'
 import dataTableDropdown from '@/features/admin/custom-attributes/dataTableDropdown.vue'
 import { Badge } from '@shared-ui/components/ui/badge'
 import { Lock } from 'lucide-vue-next'
-import { formatDateTime } from '@shared-ui/utils/datetime.js'
+import TableDate from '@main/components/table/TableDate.vue'
 
 export const createColumns = (t, { onEdit } = {}) => [
     {
         accessorKey: 'name',
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.name'))
+            return h('div', null, t('globals.terms.name'))
         },
         cell: function ({ row }) {
-            return h('div', { class: 'text-center' },
+            return h('div', null,
                 onEdit
                   ? h('span', {
                       class: 'text-foreground font-medium hover:underline cursor-pointer',
@@ -24,39 +24,42 @@ export const createColumns = (t, { onEdit } = {}) => [
     {
         accessorKey: 'key',
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.key'))
+            return h('div', null, t('globals.terms.key'))
         },
         cell: function ({ row }) {
-            return h('div', { class: 'text-center' }, row.getValue('key'))
+            return h('div', null, row.getValue('key'))
         }
     },
     {
         accessorKey: 'data_type',
+        meta: { compact: true },
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.type'))
+            return h('div', null, t('globals.terms.type'))
         },
         cell: function ({ row }) {
-            return h('div', { class: 'text-center' }, row.getValue('data_type'))
+            return h('div', null, row.getValue('data_type'))
         }
     },
     {
         accessorKey: 'applies_to',
+        meta: { compact: true },
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.appliesTo'))
+            return h('div', null, t('globals.terms.appliesTo'))
         },
         cell: function ({ row }) {
-            return h('div', { class: 'text-center' }, row.getValue('applies_to'))
+            return h('div', null, row.getValue('applies_to'))
         }
     },
     {
         accessorKey: 'read_only',
+        meta: { compact: true },
         enableGlobalFilter: false,
         header: function () {
-            return h('div', { class: 'text-center' }, t('admin.customAttributes.managed'))
+            return h('div', null, t('admin.customAttributes.managed'))
         },
         cell: function ({ row }) {
-            if (!row.getValue('read_only')) return h('div', { class: 'text-center text-muted-foreground' }, '-')
-            return h('div', { class: 'text-center' }, [
+            if (!row.getValue('read_only')) return h('div', { class: 'text-muted-foreground' }, '-')
+            return h('div', null, [
                 h(
                     Badge,
                     {
@@ -71,30 +74,24 @@ export const createColumns = (t, { onEdit } = {}) => [
     },
     {
         accessorKey: 'created_at',
+        meta: { compact: true },
         enableGlobalFilter: false,
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.createdAt'))
+            return h('div', null, t('globals.terms.createdAt'))
         },
         cell: function ({ row }) {
-            return h(
-                'div',
-                { class: 'text-center' },
-                formatDateTime(row.getValue('created_at'))
-            )
+            return h(TableDate, { value: row.getValue('created_at') })
         }
     },
     {
         accessorKey: 'updated_at',
+        meta: { compact: true },
         enableGlobalFilter: false,
         header: function () {
-            return h('div', { class: 'text-center' }, t('globals.terms.updatedAt'))
+            return h('div', null, t('globals.terms.updatedAt'))
         },
         cell: function ({ row }) {
-            return h(
-                'div',
-                { class: 'text-center' },
-                formatDateTime(row.getValue('updated_at'))
-            )
+            return h(TableDate, { value: row.getValue('updated_at') })
         }
     },
     {

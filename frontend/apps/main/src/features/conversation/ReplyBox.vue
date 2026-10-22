@@ -69,7 +69,7 @@
     @confirm="processSend(true, true, deferredStatus, true)"
   />
 
-  <div class="rounded-t-xl bg-background text-foreground">
+  <div class="text-foreground">
     <!-- Fullscreen editor -->
     <Dialog :open="isEditorFullscreen" @update:open="isEditorFullscreen = false">
       <DialogContent
@@ -148,7 +148,7 @@
 
     <!-- Main Editor non-fullscreen -->
     <div
-      class="bg-background text-card-foreground box m-2 px-2 pt-2 flex flex-col relative"
+      class="bg-card text-card-foreground box m-2 px-2 pt-2 flex flex-col relative"
       :class="{ '!bg-private': messageType === 'private_note', 'ai-generating': isGenerating }"
       v-if="!isCollapsed && !isEditorFullscreen"
     >
@@ -190,6 +190,7 @@
 
 <script setup>
 import { ref, watch, computed, toRaw, nextTick, onMounted, onUnmounted } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { getTextFromHTML } from '@shared-ui/utils/string'
 import { EMITTER_EVENTS } from '@main/constants/emitterEvents.js'
@@ -347,7 +348,7 @@ const {
 
 // Rest of existing state
 const isEditorFullscreen = ref(false)
-const isMinimized = ref(false)
+const isMinimized = useStorage('replyBoxMinimized', false)
 const isSending = ref(false)
 const isGenerating = ref(false)
 const to = ref('')
@@ -814,15 +815,5 @@ watch(
     showBcc.value = bcc.value.length > 0
   },
   { deep: true, immediate: true }
-)
-
-// Media files and macro state are restored per draft by the draft manager; resetting here would race ahead of the save and drop them.
-watch(
-  () => conversationStore.current?.uuid,
-  () => {
-    setTimeout(() => {
-      activeContentRef()?.focus()
-    }, 100)
-  }
 )
 </script>
