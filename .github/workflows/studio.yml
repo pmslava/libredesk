@@ -3,7 +3,7 @@
 name: studio
 
 on:
-  schedule:
+  schedule: # re-saved 2026-10-28: GitHub had stopped firing the schedule after 2026-10-22
     - cron: "30 23 * * *" # UTC
   workflow_dispatch:
     inputs:
