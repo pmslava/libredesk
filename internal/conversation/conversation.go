@@ -57,6 +57,7 @@ var (
 	efs                             embed.FS
 	errConversationNotFound         = errors.New("conversation not found")
 	ErrConversationAlreadyAssigned  = errors.New("conversation already assigned")
+	ErrAssigneeUnavailable          = errors.New("assignee is unavailable")
 	ErrMessageNotFound              = errors.New("message not found")
 	conversationsAllowedFields      = []string{"status_id", "priority_id", "assigned_team_id", "assigned_user_id", "inbox_id", "last_message_at", "last_interaction_at", "last_interaction_sender", "created_at", "waiting_since", "next_sla_deadline_at", "snoozed_until", "sla_policy_id"}
 	conversationStatusAllowedFields = []string{"id", "name"}
@@ -209,6 +210,7 @@ type mediaStore interface {
 	ContentIDExists(contentID, conversationUUID string) (bool, string, error)
 	Upload(fileName, contentType string, content io.ReadSeeker) (string, string, error)
 	UploadAndInsert(fileName, contentType, contentID string, modelType null.String, modelID null.Int, content io.ReadSeeker, fileSize int, disposition null.String, meta []byte, private bool) (mmodels.Media, error)
+	Delete(name string) error
 }
 
 type inboxStore interface {
@@ -875,7 +877,7 @@ func (c *Manager) UpdateConversationUserAssignee(uuid string, assigneeID int, ac
 	return c.afterUserAssignedHooks(uuid, assigneeID, actor, amodels.PreviousValues(previousConversation))
 }
 
-// ClaimUnassignedConversation atomically assigns a conversation only if still unassigned and still in expectedTeamID, else returns ErrConversationAlreadyAssigned.
+// ClaimUnassignedConversation atomically assigns a conversation only if still unassigned, still in expectedTeamID and the assignee is an enabled, non-away agent of that team.
 func (c *Manager) ClaimUnassignedConversation(uuid string, assigneeID, expectedTeamID int, actor umodels.User) error {
 	previousConversation, err := c.GetConversation(0, uuid, "")
 	if err != nil {
@@ -883,17 +885,15 @@ func (c *Manager) ClaimUnassignedConversation(uuid string, assigneeID, expectedT
 	}
 	prev, prevErr := c.GetConversationListItem(uuid)
 
-	res, err := c.q.ClaimUnassignedConversation.Exec(uuid, assigneeID, expectedTeamID)
-	if err != nil {
+	var available, claimed bool
+	if err := c.q.ClaimUnassignedConversation.QueryRow(uuid, assigneeID, expectedTeamID).Scan(&available, &claimed); err != nil {
 		c.lo.Error("error claiming unassigned conversation", "uuid", uuid, "error", err)
 		return envelope.NewError(envelope.GeneralError, c.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		c.lo.Error("error reading rows affected for conversation claim", "uuid", uuid, "error", err)
-		return envelope.NewError(envelope.GeneralError, c.i18n.T("globals.messages.somethingWentWrong"), nil)
-	}
-	if rows == 0 {
+	if !claimed {
+		if !available {
+			return ErrAssigneeUnavailable
+		}
 		return ErrConversationAlreadyAssigned
 	}
 
@@ -1115,7 +1115,7 @@ func (c *Manager) UpdateConversationStatus(uuid string, statusID int, status, sn
 	if status == models.StatusSnoozed {
 		duration, err := time.ParseDuration(snoozeDur)
 		if err != nil || duration <= 0 {
-			c.lo.Error("error parsing snooze duration", "duration", snoozeDur, "error", err)
+			c.lo.Debug("error parsing snooze duration", "duration", snoozeDur, "error", err)
 			return envelope.NewError(envelope.InputError, c.i18n.T("validation.invalidSnoozeDuration"), nil)
 		}
 		snoozeUntil = time.Now().Add(duration)
@@ -1666,7 +1666,7 @@ func (m *Manager) ApplyAction(action amodels.RuleAction, conv models.Conversatio
 		}
 		return m.UpdateConversationStatus(conv.UUID, statusID, "", "", user)
 	case amodels.ActionSendPrivateNote:
-		_, err := m.SendPrivateNote([]mmodels.Media{}, user.ID, conv.UUID, action.Value[0], nil)
+		_, err := m.SendPrivateNote([]mmodels.Media{}, user.ID, conv.UUID, m.RenderStaffTemplate(conv.UUID, user.ID, action.Value[0]), nil)
 		if err != nil {
 			return fmt.Errorf("sending private note: %w", err)
 		}
@@ -1686,7 +1686,7 @@ func (m *Manager) ApplyAction(action amodels.RuleAction, conv models.Conversatio
 			user.ID,
 			conv.ContactID,
 			conv.UUID,
-			action.Value[0],
+			m.RenderStaffTemplate(conv.UUID, user.ID, action.Value[0]),
 			to,
 			nil,
 			nil,
@@ -2133,7 +2133,7 @@ func (c *Manager) ValidateListFilters(filtersJSON string) error {
 	if err == nil {
 		return nil
 	}
-	c.lo.Error("error validating view filters", "error", err)
+	c.lo.Debug("error validating view filters", "error", err)
 	if errors.Is(err, dbutil.ErrTooManyGroups) {
 		return envelope.NewError(envelope.InputError, c.i18n.Ts("conversation.filters.tooManyGroups", "max", fmt.Sprintf("%d", dbutil.MaxFilterGroups)), nil)
 	}

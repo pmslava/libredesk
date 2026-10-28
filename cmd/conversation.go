@@ -603,7 +603,7 @@ func handleUpdateUserAssignee(r *fastglue.Request) error {
 	)
 
 	if err := r.Decode(&req, "json"); err != nil {
-		app.lo.Error("error decoding assignee change request", "error", err)
+		app.lo.Debug("error decoding assignee change request", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("errors.parsingRequest"), nil, envelope.InputError)
 	}
 
@@ -1038,6 +1038,17 @@ func handleCreateConversation(r *fastglue.Request) error {
 		return sendErrorEnvelope(r, err)
 	}
 
+	if req.Initiator == umodels.UserTypeContact {
+		canWriteAsContact, err := app.authz.Enforce(user, "messages", "write_as_contact")
+		if err != nil {
+			app.lo.Error("error checking permission", "error", err)
+			return sendErrorEnvelope(r, envelope.NewError(envelope.GeneralError, app.i18n.T("globals.messages.somethingWentWrong"), nil))
+		}
+		if !canWriteAsContact {
+			return sendErrorEnvelope(r, envelope.NewError(envelope.PermissionError, app.i18n.T("status.deniedPermission"), nil))
+		}
+	}
+
 	var (
 		contactID int
 		to        = []string{req.Email}
@@ -1150,7 +1161,8 @@ func handleCreateConversation(r *fastglue.Request) error {
 		}
 		_, sendErr = app.conversation.QueueReply(media, req.InboxID, auser.ID, contactID, conversationUUID, "" /** content **/, nil /** to **/, nil /** cc **/, nil /** bcc **/, "" /** sendFrom **/, meta)
 	case req.Initiator == umodels.UserTypeAgent:
-		_, sendErr = app.conversation.QueueReply(media, req.InboxID, auser.ID, contactID, conversationUUID, req.Content, to, req.CC, req.BCC, req.SendFrom, map[string]any{} /** meta **/)
+		content := app.conversation.RenderStaffTemplate(conversationUUID, auser.ID, req.Content)
+		_, sendErr = app.conversation.QueueReply(media, req.InboxID, auser.ID, contactID, conversationUUID, content, to, req.CC, req.BCC, req.SendFrom, map[string]any{} /** meta **/)
 	case req.Initiator == umodels.UserTypeContact:
 		agentInitiated = false
 		_, sendErr = app.conversation.CreateContactMessage(media, contactID, conversationUUID, req.Content, cmodels.ContentTypeHTML, true, req.SourceID, auser.ID)
