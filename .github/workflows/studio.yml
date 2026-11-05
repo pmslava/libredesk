@@ -3,7 +3,7 @@
 name: studio
 
 on:
-  schedule: # re-saved 2026-10-28: GitHub had stopped firing the schedule after 2026-10-22
+  schedule: # touched 2026-11-05 with Actions enabled: a cron is registered only when the file is pushed while Actions is on
     - cron: "30 23 * * *" # UTC
   workflow_dispatch:
     inputs:
