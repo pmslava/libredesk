@@ -362,6 +362,11 @@ const getConversation = (uuid) => http.get(`/api/v1/conversations/${uuid}`, { ab
 const deleteConversation = (uuid, params) => http.delete(`/api/v1/conversations/${uuid}`, { params })
 const getConversationTranscript = (uuid) =>
   http.get(`/api/v1/conversations/${uuid}/transcript`, { responseType: 'blob' })
+const getTranscriptTemplate = () =>
+  http.get('/static/public/static/transcript.html', {
+    responseType: 'text',
+    headers: { 'Cache-Control': 'no-cache' }
+  })
 const getContactPageVisits = (uuid) => http.get(`/api/v1/conversations/${uuid}/page-visits`, { abortOnRoute: true })
 const getMacrosCompact = (params) => http.get('/api/v1/macros/compact', { params })
 const searchMacros = (params) => http.get('/api/v1/macros/search', { params })
@@ -724,6 +729,7 @@ export default {
   getConversationMessage,
   getConversationMessages,
   getConversationTranscript,
+  getTranscriptTemplate,
   getCurrentUser,
   getCurrentUserTeams,
   getMacrosCompact,
