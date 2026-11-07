@@ -112,6 +112,13 @@ func initConfig(ko *koanf.Koanf) {
 			return key, val
 		},
 	}), nil)
+	if ko.String("app.server.client_ip_header") == "" {
+		header := "X-Client-IP"
+		if os.Getenv("RAILWAY_ENVIRONMENT_ID") != "" {
+			header = "X-Real-IP"
+		}
+		ko.Set("app.server.client_ip_header", header)
+	}
 }
 
 // validateConfig logs warnings/fatals for invalid config values.
@@ -1239,6 +1246,8 @@ func initWebhook(db *sqlx.DB, i18n *i18n.I18n, dialControl ssrf.Control) *webhoo
 		Timeout:       ko.MustDuration("webhook.timeout"),
 		EncryptionKey: ko.MustString("app.encryption_key"),
 		DialControl:   dialControl,
+		MaxRetries:    ko.Int("webhook.max_retries"),
+		RetryBackoff:  ko.Duration("webhook.retry_backoff"),
 	})
 	if err != nil {
 		log.Fatalf("error initializing webhook manager: %v", err)
@@ -1370,8 +1379,8 @@ func getLogLevel(lvl string) logf.Level {
 
 // initRateLimit initializes the rate limiter with default rules.
 // Defaults are used unless overridden in config.toml under [rate_limit.<name>].
-func initRateLimit(redisClient *redis.Client) *ratelimit.Limiter {
-	limiter := ratelimit.New(redisClient, initLogger("rate_limit"))
+func initRateLimit(redisClient *redis.Client, clientIPHeader string) *ratelimit.Limiter {
+	limiter := ratelimit.New(redisClient, initLogger("rate_limit"), clientIPHeader)
 
 	defaults := []struct {
 		Name string
